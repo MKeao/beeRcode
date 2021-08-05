@@ -1,0 +1,50 @@
+library(igraph)
+library(stringr)
+library(bipartite)
+library(ggplot2)
+library(reshape2)
+library(tidyverse)
+library(tidyr)
+
+Melt_data <- melt(data, id.vars=c("Date", "Plant", "proportion"))
+
+Melt_data2<-Melt_data[!(Melt_data$value=="0"),]
+
+Melt_data3 <- subset (Melt_data2, select = -value)
+
+Melt_data3$variable <- as.character(Melt_data3$variable)
+
+Melt_data4 <- Melt_data3[, c(2, 4, 1, 3)]
+
+write.csv(Melt_data4, file = "my_data.csv")
+
+#These are the final shape of dataframes for building networks. they have 4 columns, each row is a single observation:
+# 1) higher order taxa (plant species in this case)
+# 2) lower order taxa (pollinator order)
+# 3) optional: weight of the interaction. in sarahs case, each insect visit was weighted by floral area for the plant, but we also did it without this
+# 4) ID: if you have multiple sites you want to build networks for, you differentiate them here. If you only have one big network, as here, just put a dummy 
+# ID of 'a'
+
+
+# The function frame2webs converts the dataframe to the format needed to visualize the network with the below functions.
+
+web.genus <- frame2webs(mydata1, varnames = c("Plant.genus", "Bee.genus", "proportion"), type.out =
+             "array", emptylist = T)
+
+# run these to see what they do. 
+
+visweb(as.data.frame(web.genus))
+plotweb(as.data.frame(web.genus),text.rot=90,labsize=1)
+
+#How are species ranked from specialist to generalist?
+
+Melt_data3 <- melt(mydata5, id.vars=c("Plant"))
+
+vec <- c(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)
+
+Melt_data3$new_col <- vec
+
+data2 <- frame2webs(Melt_data3, varnames = c("variable", "Plant", "new_col", "value"), 
+                    type.out = "array", emptylist = T)
+
+nestedrank(data2, method = "NODF", weighted=TRUE, normalise=TRUE, return.matrix=FALSE)
