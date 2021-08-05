@@ -1,0 +1,182 @@
+library(reshape2)
+library(dplyr)
+library(ggplot2)
+library(vegan)
+library(tidyverse)
+library(viridis)
+
+
+
+# Significant differences in species richness?
+summary(aov(Plant.genera.visited ~ Bee, data = abundance))
+
+#makes plot
+pal <- c("lightsalmon1", "gold1", "palegreen4")
+
+plot_sppr <- ggplot(simpplant2, aes(x = Site, y = Species.richness, fill = Site)) +
+  geom_boxplot() 
+
+plot_sppr
+
+#calculate diversity and assigns values to new column
+Group$shannon <- diversity(Group[,-c(1:2)], index="shannon")
+
+summary(aov(shannon ~ Site.type + Group, data = Group))
+
+
+#can we explain richness or diversity by meters measured?
+m1 <- lm(PPGroot~ Date + Predicted.percent, data = mydata4)
+summary(m1)
+
+#how similar are floral communities? NMDS
+
+nmds_results <- metaMDS(comm = mydata[ ,4:69],  # Define the community data 
+                        distance = "bray",       # Specify a bray-curtis distance
+                        try = 100)               # Number of iterations 
+nmds_results
+
+# First create a data frame of the scores from the individual sites.
+# This data frame will contain x and y values for where sites are located.
+data_scores <- as.data.frame(scores(nmds_results))
+
+# Now add the extra aquaticSiteType column
+data_scores <- cbind(data_scores, mydata3[,1])
+data_scores <- cbind(data_scores, mydata3[,2])
+colnames(data_scores)[3] <- "Month"
+colnames(data_scores)[4] <- "Group"
+# Next, we can add the scores for species data
+species_scores <- as.data.frame(scores(nmds_results, "species"))
+
+# Add a column equivalent to the row name to create species labels
+species_scores$species <- rownames(species_scores)
+
+# Then we have to make the clusters to add to our graph
+
+cent <- aggregate(cbind(NMDS1, NMDS2) ~ Group, data = data_scores, FUN = mean)
+
+segs <- merge(data_scores, setNames(cent, c('Group','oNMDS1','oNMDS2')),
+                             by = 'Group', sort = FALSE)
+# Now we can build the plot!
+
+ggplot() +
+  geom_point(data = species_scores, aes(x = NMDS1, y = NMDS2),
+            alpha = 0.5, size = 2) +
+  geom_point(data = data_scores, aes(x = NMDS1, y = NMDS2, 
+                                     color = Group, shape = Month), size = 3) +
+  scale_color_manual(values = inferno(15)[c(3, 8, 11, 1, 2, 4)],
+                     name = "Site") +
+annotate(geom = "label", x = 0, y = 1.25, size = 5,
+         label = paste("Stress: ", round(nmds_results$stress, digits = 3))) +
+  theme_minimal() +
+  theme(legend.position = "right",
+        text = element_text(size = 24)) 
+
+#Other code missing 
+
+### permanova of distance data 
+
+plant.matrix<-as.matrix(Lasioglossum[ ,2:45])
+
+dist.mat<-vegdist(plant.matrix, method='jaccard')
+
+plant.div<-adonis2(dist.mat~ Bee.genus, data=Andrena, method="jaccard")
+
+plant.div
+
+#plots a cluster of sites with the most similar communities 
+
+clust.res<-hclust(dist.mat, method = "ward.D") #which linkage method is best?
+
+plot(clust.res)
+
+# used to see if there are differences in individual variation between pollen loads
+
+Wide_data <- spread(mydata, Plant.genus, proportion)
+
+Wide_data[is.na(Wide_data)] <- 0
+
+Wide_data[,3:49] <- sapply(Wide_data[,3:49],as.numeric)
+
+matrix<-as.matrix(Wide_data[,3:49])
+
+bray.dist<-vegdist(matrix, method='bray')
+
+adonis(bray.dist ~ Bee.genus,
+       method = "bray",
+       data = Wide_data,
+       permutations = 999, by = "terms")
+
+# makes function pairwise.adonis work
+
+pairwise.adonis <- function(x,factors, sim.function = 'vegdist', sim.method = 'bray', p.adjust.m ='bonferroni')
+{
+  library(vegan)
+  
+  co = combn(unique(as.character(factors)),2)
+  pairs = c()
+  F.Model =c()
+  R2 = c()
+  p.value = c()
+  
+  
+  for(elem in 1:ncol(co)){
+    if(sim.function == 'daisy'){
+      library(cluster); x1 = daisy(x[factors %in% c(co[1,elem],co[2,elem]),],metric=sim.method)
+    } else{x1 = vegdist(x[factors %in% c(co[1,elem],co[2,elem]),],method=sim.method)}
+    
+    ad = adonis(x1 ~ factors[factors %in% c(co[1,elem],co[2,elem])] );
+    pairs = c(pairs,paste(co[1,elem],'vs',co[2,elem]));
+    F.Model =c(F.Model,ad$aov.tab[1,4]);
+    R2 = c(R2,ad$aov.tab[1,5]);
+    p.value = c(p.value,ad$aov.tab[1,6])
+  }
+  p.adjusted = p.adjust(p.value,method=p.adjust.m)
+  sig = c(rep('',length(p.adjusted)))
+  sig[p.adjusted <= 0.05] <-'.'
+  sig[p.adjusted <= 0.01] <-'*'
+  sig[p.adjusted <= 0.001] <-'**'
+  sig[p.adjusted <= 0.0001] <-'***'
+  
+  pairw.res = data.frame(pairs,F.Model,R2,p.value,p.adjusted,sig)
+  print("Signif. codes:  0 â***â 0.001 â**â 0.01 â*â 0.05 â.â 0.1 â â 1")
+  return(pairw.res)
+  
+} 
+
+#end function - is not working with new bray curtis 
+
+
+pairwise.adonis(Wide_data[,3:49],Wide_data$Bee.genus)
+
+#chi square for expected vs. actual collections - Note:data must be non-negative, my transformations don't work
+
+dc <- as.table(as.matrix(chi1))
+
+chisq <- chisq.test(dc)
+
+# Does our predicted data based on plant surveys explain our actual data? 
+
+install.packages("bestNormalize")
+
+library(bestNormalize)
+
+trans_PPGpercent <- bestNormalize(mydata4$PPG.percent) #gives us orderNorm transformation
+
+trans_PPGpercent <- orderNorm(mydata4$PPG.percent)
+
+predict_PPGpercent <- predict(trans_PPGpercent)
+
+trans_predicted.percent <- bestNormalize(mydata4$Predicted.percent) #gives us square root transformation
+
+trans_predicted.percent <- sqrt_x(mydata4$Predicted.percent)
+
+predict_predicted.percent <- predict(trans_predicted.percent)
+
+m1 <- lm(predict_predicted.percent~ Date + predict_PPGpercent, data = mydata4)
+summary(m1)
+
+#writes data to excel file 
+
+library(xlsx)
+
+write.xlsx(df, "transformedPPGPercent2.xlsx")
