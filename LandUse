@@ -1,0 +1,46 @@
+rm(list=ls())
+for (package in c("sp","rgdal", 'raster', "sf", "dplyr"
+)) {
+  if (!require(package, character.only=T, quietly=T)) {
+    install.packages(package)
+    library(package, character.only=T)
+  }
+}
+
+cdl <- raster("CDL_clip.tif", RAT = TRUE)
+sites <- read.csv("sites.csv")
+rcl <- read.csv("reclass_all.csv")
+
+sites.sp <- SpatialPointsDataFrame(sites[,3:2], sites)
+proj<-CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0")
+proj4string(sites.sp) <- proj
+
+buffer<-buffer(sites.sp, width=3000, dissolve=F) # 3 km 
+buffer <- spTransform(buffer, proj) # I changed this but it should also work the other way
+
+
+#clip raster to 3.0 km 
+cdl.sw <- crop(cdl, buffer) ### this line doesn't work for Makaylee
+mask_all <-mask(cdl.sw, buffer)
+reclass_all<-reclassify(mask_all, as.matrix(rcl[,c(1:3)]))
+cdl.val <- extract(reclass_all, buffer)
+
+names(cdl.val)<-buffer$site 
+start <- 0
+table_all<-data.frame(matrix(NA, nrow = nrow(sites), ncol = 128))
+
+for(j in 1:length(cdl.val)){
+  start <- start + 1
+  table_all[start, 1] <- names(cdl.val[j])
+  table_all[start, 2:ncol(table_all)]<-table(factor(cdl.val[[j]], levels = 0:126))
+}
+
+area.r<-(table_all[,-1]*900)/1000000
+
+land_area<- as.data.frame(area.r)
+
+colnames(land_area) <- c(as.character(unique(rcl$reclass_name)), "site")
+land_area$site<-table_all[,1]
+
+
+write.csv(land_area, "land3km.csv", row.names = F)
