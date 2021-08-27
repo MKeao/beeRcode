@@ -1,0 +1,83 @@
+ArboretumG1 <- read.csv("C:/Users/Doug/Downloads/ArboretumG1.csv")
+
+# number of permutations: should be at least 1000, 10000 better for publication
+# here, using 100 for speed
+
+nperm <- 100
+
+# set up data frame for storing permutation results
+permutation.results <- data.frame(matrix(0, ncol = length(ArboretumG1$Genus), nrow = nperm))
+colnames(permutation.results) <- c(ArboretumG1$Genus)
+
+# scale plant data to proportions
+# scale to cumulative fraction of sample to make it easy to randomly sample
+plantval <- c(0, with(ArboretumG1, cumsum(Plant / sum(Plant))))
+
+
+# use 20 random "bee visits" to flowers, and record what is visited
+# this could be related to actual number of flowers a bee might visit?
+# if you do it enough times, it will exactly match the proportion in the plantval
+# so you need to use fewer
+
+nvisits <- 7172
+
+# make reproducible
+set.seed(111)
+
+# using loops makes it easier to see what's going on
+for(thisperm in seq_len(nperm)) {
+  
+  for(thisvisit in seq_len(nvisits)) {
+    
+    # randomly choose a genus based on its proportion in the sample
+    # rand in interval from 0 to genus1, from genus1 to genus2, etc 
+    #Note - I assumed I needed to change the runif(1) to 27 since we have 27 genera
+    r <- runif(27)
+    thisgenus <- max(which(plantval <= r))
+    
+    # record a visit
+    permutation.results[thisperm, thisgenus] <- permutation.results[thisperm, thisgenus] + 1
+    
+  }
+  
+}
+
+# scale to proportion of samples
+# Note - Changed 20 to my number of visitations, unsure if 1 needs to change too?
+permutation.results <- sweep(permutation.results, 1, 7172, "/")
+
+# now, the statistical test: is the proportion observed in the bee pollen 
+# greater than would be expected by chance?
+# using a two-tailed test
+# with the null expectation that the bee proportion is in the middle of the 
+# modeled distribution
+
+# scale bee data to proportions to match
+beeval <- with(ArboretumG1, Bee / sum(Bee))
+
+# use binom.test to look at sign of differences
+
+for(i in seq_len(ncol(permutation.results))) {
+  
+  pos <- sum(permutation.results[, i] < beeval[i])
+  neg <- sum(permutation.results[, i] >= beeval[i])
+  print(binom.test(c(pos, neg)))
+}
+
+
+# visualize
+
+par(mfrow=c(2, 2))
+
+for(i in seq_len(length(ArboretumG1$Genus))) {
+  
+  hist(permutation.results[, i], main = paste("distribution of genus", ArboretumG1$Genus[i]), xlim=c(0, 1))
+  abline(v=beeval[i], col="red")
+  
+}
+
+
+if(!require(installr)) {
+  install.packages("installr"); 
+  require(installr)
+  
