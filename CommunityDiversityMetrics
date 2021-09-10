@@ -19,18 +19,21 @@ plot_sppr <- ggplot(simpplant2, aes(x = Site, y = Species.richness, fill = Site)
 plot_sppr
 
 #calculate diversity and assigns values to new column
-Group$shannon <- diversity(Group[,-c(1:2)], index="shannon")
+data$shannon <- diversity(data[,-c(1:2)], index="shannon")
 
-summary(aov(shannon ~ Site.type + Group, data = Group))
+summary(aov(shannon ~ Site, data = data))
 
 
 #can we explain richness or diversity by meters measured?
-m1 <- lm(PPGroot~ Date + Predicted.percent, data = mydata4)
+m1 <- lm(Collrichness ~ Site, data = data1)
 summary(m1)
+
+#scatterplot
+scatter.smooth(x=data1$Smeters, y=data1$Shannon, main="Dist ~ Speed")
 
 #how similar are floral communities? NMDS
 
-nmds_results <- metaMDS(comm = mydata[ ,4:69],  # Define the community data 
+nmds_results <- metaMDS(comm = data3[ ,4:43],  # Define the community data 
                         distance = "bray",       # Specify a bray-curtis distance
                         try = 100)               # Number of iterations 
 nmds_results
@@ -40,10 +43,14 @@ nmds_results
 data_scores <- as.data.frame(scores(nmds_results))
 
 # Now add the extra aquaticSiteType column
-data_scores <- cbind(data_scores, mydata3[,1])
-data_scores <- cbind(data_scores, mydata3[,2])
+data_scores <- cbind(data_scores, data3[,1])
+data_scores <- cbind(data_scores, data3[,2])
+data_scores <- cbind(data_scores, data3[,3])
 colnames(data_scores)[3] <- "Month"
-colnames(data_scores)[4] <- "Group"
+colnames(data_scores)[4] <- "Site"
+colnames(data_scores)[5] <- "BeeGenus"
+
+
 # Next, we can add the scores for species data
 species_scores <- as.data.frame(scores(nmds_results, "species"))
 
@@ -52,21 +59,21 @@ species_scores$species <- rownames(species_scores)
 
 # Then we have to make the clusters to add to our graph
 
-cent <- aggregate(cbind(NMDS1, NMDS2) ~ Group, data = data_scores, FUN = mean)
+cent <- aggregate(cbind(NMDS1, NMDS2) ~ BeeGenus, data = data_scores, FUN = mean)
 
-segs <- merge(data_scores, setNames(cent, c('Group','oNMDS1','oNMDS2')),
-                             by = 'Group', sort = FALSE)
+segs <- merge(data_scores, setNames(cent, c('BeeGenus','oNMDS1','oNMDS2')),
+              by = 'BeeGenus', sort = FALSE)
 # Now we can build the plot!
 
 ggplot() +
   geom_point(data = species_scores, aes(x = NMDS1, y = NMDS2),
-            alpha = 0.5, size = 2) +
+             alpha = 0.5, size = 2) +
   geom_point(data = data_scores, aes(x = NMDS1, y = NMDS2, 
-                                     color = Group, shape = Month), size = 3) +
-  scale_color_manual(values = inferno(15)[c(3, 8, 11, 1, 2, 4)],
-                     name = "Site") +
-annotate(geom = "label", x = 0, y = 1.25, size = 5,
-         label = paste("Stress: ", round(nmds_results$stress, digits = 3))) +
+                                     color = Site, shape = BeeGenus), size = 3) +
+  scale_color_manual(values = inferno(15)[c(3, 8, 11, 1, 5, 7)],
+                     name = "BeeGenus") +
+  annotate(geom = "label", x = 0, y = 1.25, size = 5,
+           label = paste("Stress: ", round(nmds_results$stress, digits = 3))) +
   theme_minimal() +
   theme(legend.position = "right",
         text = element_text(size = 24)) 
@@ -89,7 +96,7 @@ clust.res<-hclust(dist.mat, method = "ward.D") #which linkage method is best?
 
 plot(clust.res)
 
-# used to see if there are differences in individual variation between pollen loads
+# used to see if there are differences in species variation between pollen loads
 
 Wide_data <- spread(mydata, Plant.genus, proportion)
 
