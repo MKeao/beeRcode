@@ -32,8 +32,80 @@ summary(m1)
 scatter.smooth(x=data1$Smeters, y=data1$Shannon, main="Dist ~ Speed")
 
 #how similar are floral communities? NMDS
+#First transform data from long to wide
+Wide_data4 <- spread(Time4, Genus.name, Number.of.occurances)
 
-nmds_results <- metaMDS(comm = data3[ ,4:43],  # Define the community data 
+library(xlsx)
+
+write.xlsx(Wide_data4, "Wide_data4.xlsx")
+
+Wide_data1[Wide_data1 == "#N/A"] = NA
+
+Wide_data4[is.na(Wide_data4)] = 0
+
+
+poll = Wide_data1[,2:ncol(Wide_data1)] #this gets rid of the first few columns that weren't necessary for me. 
+
+#poll.scl <- poll %>% scale %>% data.frame #this scales all of the data and turns it into a dataframe.
+
+poll.hel <- decostand(matrix, "rrank") #this runs the "relative rank transformation" on the data
+
+m_com = as.matrix(poll.hel) #this makes it a matrix for the NMDS 
+
+nmds = metaMDS(m_com, distance = "bray") #this runs the NMDS with the regular Bray-curtis distance.
+
+nmds #this shows the NMDS data
+
+
+plot(nmds)#this plots the NMDS
+
+
+#this code chunk was all about visualizing the data better
+
+data.scores = as.data.frame(scores(nmds)) #this creates a dataframe of just the scores of the NMDS.
+
+#You'll likely only need to do this for 
+data.scores$Month = mydata$Month #This adds a column titled 'Year' to the data.scores dataframe, adding the original data's Year information.
+data.scores$Site = mydata$Site#same for region
+data.scores$Beegenus = mydata$Beegenus #same for Landowner.type
+
+head(data.scores) #This tests to make sure it works.
+
+species.scores <- as.data.frame(scores(nmds, "species"))  #Using the scores function from vegan to extract the species scores and convert to a data.frame
+species.scores$species <- rownames(species.scores)  # create a column of species, from the rownames of species.scores
+head(species.scores)  #look at the data
+
+
+library(ggplot2)
+library(plyr)
+find_hull <- function(df) df[chull(df$NMDS1, df$NMDS2), ]
+hulls <- ddply(data.scores , "Site", find_hull) #This code creates groups based on region.
+
+#Below is code to make a ~pretty graph~. 
+ggplot(data.scores, aes(x = NMDS1, y = NMDS2)) + 
+  geom_point(size = 4, aes(shape = Month, colour = Beegenus))+ 
+  theme(axis.text.y = element_text(colour = "black", size = 12), 
+        axis.text.x = element_text(colour = "black", size = 12), 
+        legend.text = element_text(size = 12, colour ="black"), 
+        legend.position = "right", axis.title.y = element_text(size = 14), 
+        axis.title.x = element_text( size = 14, colour = "black"), 
+        legend.title = element_text(size = 14, colour = "black"), 
+        panel.background = element_blank(), panel.border = element_rect(colour = "black", fill = NA, size = 1.2),
+        legend.key=element_blank()) + 
+  labs(x = "NMDS1", colour = "Bee genus", y = "NMDS2", shape = "Month")  + 
+  scale_colour_manual(values = c("#34FF33", "#D4D835", "#A035D8" , "#359ED8","#FFCE30", "#44eed0", "#ff0000"))+
+  geom_polygon(data = hulls, aes(x=NMDS1, y=NMDS2, colour=Beegenus), fill=NA) +
+  geom_text(data=species.scores,aes(x=NMDS1,y=NMDS2,label=species),alpha=0.5, position=position_jitter(width=1,height=1))
+
+
+
+#if you're doing a plant NMDS with only one treatment
+
+poll.hel <- decostand(Wide_data1, "rrank") #this runs the "relative rank transformation" on the data
+
+m_com = as.matrix(poll.hel)
+
+nmds_results <- metaMDS(comm = m_com[ ,2:52],  # Define the community data 
                         distance = "bray",       # Specify a bray-curtis distance
                         try = 100)               # Number of iterations 
 nmds_results
@@ -43,11 +115,11 @@ nmds_results
 data_scores <- as.data.frame(scores(nmds_results))
 
 # Now add the extra aquaticSiteType column
-data_scores <- cbind(data_scores, data3[,1])
-data_scores <- cbind(data_scores, data3[,2])
-data_scores <- cbind(data_scores, data3[,3])
+data_scores <- cbind(data_scores, Wide_data1[,1])
+data_scores <- cbind(data_scores, Wide_data2[,2])
+data_scores <- cbind(data_scores, Wide_data2[,3])
 colnames(data_scores)[3] <- "Month"
-colnames(data_scores)[4] <- "Site"
+colnames(data_scores)[3] <- "Site"
 colnames(data_scores)[5] <- "BeeGenus"
 
 
@@ -59,34 +131,54 @@ species_scores$species <- rownames(species_scores)
 
 # Then we have to make the clusters to add to our graph
 
-cent <- aggregate(cbind(NMDS1, NMDS2) ~ BeeGenus, data = data_scores, FUN = mean)
+cent <- aggregate(cbind(NMDS1, NMDS2) ~ Site, data = data_scores, FUN = mean)
 
-segs <- merge(data_scores, setNames(cent, c('BeeGenus','oNMDS1','oNMDS2')),
-              by = 'BeeGenus', sort = FALSE)
+segs <- merge(data_scores, setNames(cent, c('Site','oNMDS1','oNMDS2')),
+              by = 'Site', sort = FALSE)
 # Now we can build the plot!
 
 ggplot() +
   geom_point(data = species_scores, aes(x = NMDS1, y = NMDS2),
              alpha = 0.5, size = 2) +
   geom_point(data = data_scores, aes(x = NMDS1, y = NMDS2, 
-                                     color = Site, shape = BeeGenus), size = 3) +
-  scale_color_manual(values = inferno(15)[c(3, 8, 11, 1, 5, 7)],
-                     name = "BeeGenus") +
+                                     color = Site), 
+                                     size = 3) +
+  scale_color_manual(values = inferno(15)[c(2, 5, 7, 9, 11, 13, 15)],
+                     name = "Site") +
   annotate(geom = "label", x = 0, y = 1.25, size = 5,
            label = paste("Stress: ", round(nmds_results$stress, digits = 3))) +
   theme_minimal() +
   theme(legend.position = "right",
         text = element_text(size = 24)) 
 
-#Other code missing 
 
-### permanova of distance data 
 
-plant.matrix<-as.matrix(Lasioglossum[ ,2:45])
+#ANOISM test - best for NMDS, but does not work for plant survey data due to lack of replication
 
-dist.mat<-vegdist(plant.matrix, method='jaccard')
+Wide_data1 <- spread(Time1, Genus, Count)
 
-plant.div<-adonis2(dist.mat~ Bee.genus, data=Andrena, method="jaccard")
+vec <- c(1, 2, 3, 4, 5, 6, 7)
+
+poll.hel$ï..Site <- vec
+
+vec
+
+com = Wide_data1[,2:ncol(Wide_data1)]
+m_com = as.matrix(com)
+
+ano = anosim(m_com, Wide_data1$Site, distance = "bray", permutations = 9999)
+
+ano
+
+
+### permanova of distance data - Need to figure out!
+
+plant.matrix<-as.matrix(Wide_data1)
+
+plant.matrix2 <- sapply(plant.matrix[,2:60],as.numeric)
+
+dist.mat<-vegdist(plant.matrix2, method='bray')
+plant.div<-adonis2(dist.mat~ Site, data=Wide_data1, method="bray")
 
 plant.div
 
@@ -100,17 +192,17 @@ plot(clust.res)
 
 Wide_data <- spread(mydata, Plant.genus, proportion)
 
-Wide_data[is.na(Wide_data)] <- 0
+mydata[is.na(mydata)] <- 0
 
-Wide_data[,3:49] <- sapply(Wide_data[,3:49],as.numeric)
+mydata[,4:43] <- sapply(mydata[,4:43],as.numeric)
 
-matrix<-as.matrix(Wide_data[,3:49])
+matrix<-as.matrix(mydata[,4:43])
 
 bray.dist<-vegdist(matrix, method='bray')
 
-adonis(bray.dist ~ Bee.genus,
+adonis(bray.dist ~ Month,
        method = "bray",
-       data = Wide_data,
+       data = mydata,
        permutations = 999, by = "terms")
 
 # makes function pairwise.adonis work
