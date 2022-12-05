@@ -3,21 +3,19 @@ cdl <- raster('COR_clip.tif')
 sites <- read.csv(sites)
 
 #change site file type
-sites.sp <- SpatialPointsDataFrame(sites[,3:2], sites)
+sites.sp <- SpatialPointsDataFrame(Sites[,3:2], Sites)
 
 #declare starting projection system for sites (lat/long)
 points <- SpatialPoints(sites.sp, proj4string =CRS("+proj=longlat +datum=WGS84"))
 
-#assign new projection to sites
-sites.sp2 <- SpatialPoints(sites.sp, proj4string =CRS("+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs"))
-
 
 #transform site points to the same crs as the raster file
-pp <- spTransform(sites.sp2, "EPSG:3035")
+pp <- spTransform(points, "EPSG:3035")
 
-
+plot(pp)
+plot(sites.sp2, add = TRUE)
 #make buffer polygons with 1000m radius for each site
-buffer1<-buffer(pp, width= 1000, dissolve=F) 
+buffer1<-buffer(pp, width= 500, dissolve=F) 
 
 #find buffer extent
 extent(buffer1)
@@ -46,4 +44,4 @@ freqs <- exact_extract(Germany, buffer1, function(value, coverage_fraction) {
   mutate(across(starts_with('freq'), replace_na, 0))
 
 #export csv file
-write.csv2(freqs, "CORINElandcover.csv")
+write.csv2(freqs, "CORINElandcover2.csv")
