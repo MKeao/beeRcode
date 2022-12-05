@@ -1,46 +1,49 @@
-rm(list=ls())
-for (package in c("sp","rgdal", 'raster', "sf", "dplyr"
-)) {
-  if (!require(package, character.only=T, quietly=T)) {
-    install.packages(package)
-    library(package, character.only=T)
-  }
-}
+#load raster and site files
+cdl <- raster('COR_clip.tif')
+sites <- read.csv(sites)
 
-cdl <- raster("CDL_clip.tif", RAT = TRUE)
-sites <- read.csv("sites.csv")
-rcl <- read.csv("reclass_all.csv")
-
+#change site file type
 sites.sp <- SpatialPointsDataFrame(sites[,3:2], sites)
-proj<-CRS("+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0")
-proj4string(sites.sp) <- proj
 
-buffer<-buffer(sites.sp, width=3000, dissolve=F) # 3 km 
-buffer <- spTransform(buffer, proj) # I changed this but it should also work the other way
+#declare starting projection system for sites (lat/long)
+points <- SpatialPoints(sites.sp, proj4string =CRS("+proj=longlat +datum=WGS84"))
 
-
-#clip raster to 3.0 km 
-cdl.sw <- crop(cdl, buffer) ### this line doesn't work for Makaylee
-mask_all <-mask(cdl.sw, buffer)
-reclass_all<-reclassify(mask_all, as.matrix(rcl[,c(1:3)]))
-cdl.val <- extract(reclass_all, buffer)
-
-names(cdl.val)<-buffer$site 
-start <- 0
-table_all<-data.frame(matrix(NA, nrow = nrow(sites), ncol = 128))
-
-for(j in 1:length(cdl.val)){
-  start <- start + 1
-  table_all[start, 1] <- names(cdl.val[j])
-  table_all[start, 2:ncol(table_all)]<-table(factor(cdl.val[[j]], levels = 0:126))
-}
-
-area.r<-(table_all[,-1]*900)/1000000
-
-land_area<- as.data.frame(area.r)
-
-colnames(land_area) <- c(as.character(unique(rcl$reclass_name)), "site")
-land_area$site<-table_all[,1]
+#assign new projection to sites
+sites.sp2 <- SpatialPoints(sites.sp, proj4string =CRS("+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs"))
 
 
-write.csv(land_area, "land3km.csv", row.names = F)
+#transform site points to the same crs as the raster file
+pp <- spTransform(sites.sp2, "EPSG:3035")
+
+
+#make buffer polygons with 1000m radius for each site
+buffer1<-buffer(pp, width= 1000, dissolve=F) 
+
+#find buffer extent
+extent(buffer1)
+
+#change the extent of the raster file to the same as that for the buffer and crop (makes raster file smaller and easier to plot)
+e <- as(extent(4064277, 4648550,  2764424, 3457660), 'SpatialPolygons')
+crs(e) <- "+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs"
+Germany <- crop(cdl, e)
+
+#make sure sites are in the right place on map
+plot(Germany)
+plot(sites.sp, add = TRUE)
+plot(buffer1, add = TRUE)
+
+
+#extract landcover classes from buffers for each point
+freqs <- exact_extract(Germany, buffer1, function(value, coverage_fraction) {
+  data.frame(value = value,
+             frac = coverage_fraction / sum(coverage_fraction)) %>%
+    group_by(value) %>%
+    summarize(freq = sum(frac), .groups = 'drop') %>%
+    pivot_wider(names_from = 'value',
+                names_prefix = 'freq_',
+                values_from = 'freq')
+}) %>% 
+  mutate(across(starts_with('freq'), replace_na, 0))
+
+#export csv file
+write.csv2(freqs, "CORINElandcover.csv")
