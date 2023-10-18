@@ -1,0 +1,105 @@
+dat$Site <- as.factor(dat$Site)
+
+dat[,5] <- exp(dat[,5])
+
+
+null.mod.nb.cells <- lmer(nb_cells ~ (1|Site) + (1|Mean_temp2) + (1|Mean_precip2), REML=FALSE, dat=dat2)
+imperv.mean.nb.cells <- lmer(nb_cells ~ (1|Site) + Mean_temp2 + Mean_precip2, REML=FALSE, dat=dat)
+
+summary(imperv.mean.nb.cells)
+confint(imperv.mean.nb.cells, method = "Wald", level=0.95)
+
+Anova(imperv.mean.nb.cells)
+
+modlist <- list(null.mod.nb.cells=null.mod.nb.cells ,
+                imperv.mean.nb.cells=imperv.mean.nb.cells)
+
+aictab(modlist)
+
+
+dat2 <- dat[-120,]
+#Chapter 5 modeling 
+effects.host.mod <- effects::effect(term= "Mean_temp2", mod= imperv.mean.nb.cells)
+
+imperv.mean.nb.cells_dat <- as.data.frame(effects.host.mod)
+
+effects.host.mod_plot <- ggplot() + 
+  #2
+  geom_point(data=dat, aes(Mean_temp2, Prop_host)) + 
+  #3
+  geom_point(data=imperv.mean.nb.cells_dat, aes(x=Mean_temp2, y=fit), color="darkgray") +
+  #4
+  geom_line(data=imperv.mean.nb.cells_dat, aes(x=Mean_temp2, y=fit), color="darkgray") +
+  #5
+  geom_ribbon(data=imperv.mean.nb.cells_dat, aes(x=Mean_temp2, ymin=lower, ymax=upper), alpha= 0.3, fill="darkgray") +
+  #6
+  labs(x="Mean yearly temperature", y="Proportion host plants")
+
+effects.host.mod_plot
+
+
+Anova(imperv.mean.nb.cells)
+
+
+dat$Type <- factor(dat$Type, levels=c("High", "Mid", "Low"))
+
+
+Tudek2 <- acast(tudek, Class ~ aaa_header, value.var = "prop")
+Tudek2[is.na(Tudek2)] = 0
+visweb(Tudek2, labsize=2, type = "none")
+
+data <- as.data.frame(diversity(Tudek2, index = "shannon"))
+
+#load raster and site files
+cdl <- raster('permeability_wgs84.tif')
+sites <- read.csv(sites)
+
+#change site file type
+sites.sp <- SpatialPointsDataFrame(sites[,3:2], sites)
+
+#declare starting projection system for sites (lat/long)
+points <- SpatialPoints(sites.sp, proj4string =CRS("+proj=longlat +datum=WGS84"))
+
+
+#transform site points to the same crs as the raster file
+pp <- sp::spTransform(points, sp::CRS(" +proj=merc +a=6378137 +b=6378137 +lat_ts=0 +lon_0=0 +x_0=0 +y_0=0
++k=1 +units=m +nadgrids=@null +wktext +no_defs"))
+
+plot(cdl)
+plot(pp, add = TRUE)
+
+
+#make buffer polygons with 150m radius for each site
+
+buffer1<-buffer(pp, width= 150, dissolve=F) 
+
+#find buffer extent
+extent(buffer1)
+extent(cdl)
+
+#change the extent of the raster file to the same as that for the buffer and crop (makes raster file smaller and easier to plot)
+e <- as(extent(-8851111, -8838804, 5412821, 5431068), 'SpatialPolygons')
+crs(e) <- "+proj=merc +a=6378137 +b=6378137 +lat_ts=0 +lon_0=0 +x_0=0 +y_0=0 +k=1 +units=m +nadgrids=@null
++wktext +no_defs"
+Toronto <- crop(cdl, e)
+
+#make sure sites are in the right place on map
+plot(e)
+plot(pp, add = TRUE)
+plot(buffer1, add = TRUE)
+
+
+#extract landcover classes from buffers for each point
+freqs <- exact_extract(Toronto, buffer1, function(value, coverage_fraction) {
+  data.frame(value = value,
+             frac = coverage_fraction / sum(coverage_fraction)) %>%
+    group_by(value) %>%
+    summarize(freq = sum(frac), .groups = 'drop') %>%
+    pivot_wider(names_from = 'value',
+                names_prefix = 'freq_',
+                values_from = 'freq')
+}) %>% 
+  mutate(across(starts_with('freq'), replace_na, 0))
+
+#export csv file
+write.csv2(its1Long, "Cdat.csv")
