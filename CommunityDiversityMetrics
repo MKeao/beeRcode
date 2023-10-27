@@ -29,7 +29,7 @@ nmds = metaMDS(m_com, distance = "bray")
 plot(nmds)
 
 #this creates a dataframe of just the scores of the NMDS.
-data.scores = as.data.frame(scores(nmds))
+data.scores = as.data.frame(scores(nmds)$sites)
 
 #Adds back variable columns removed earlier. Add columns from origina dataset to data.scores matrix. 
 data.scores$Month = sum.genus$Month 
