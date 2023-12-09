@@ -28,7 +28,7 @@ nmds = metaMDS(m_com, distance = "bray")
 
 plot(nmds)
 
-#this creates a dataframe of just the scores of the NMDS.
+# You have to use this with new version of vegan! No site variable, its just refering to nmds code nonsense. this creates a dataframe of just the scores of the NMDS.
 data.scores = as.data.frame(scores(nmds)$sites)
 
 #Adds back variable columns removed earlier. Add columns from origina dataset to data.scores matrix. 
