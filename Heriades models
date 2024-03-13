@@ -1,4 +1,12 @@
-﻿#makes your random factor a factor
+
+#download the matching versions of Matrix and lme4 so that they are compatible.
+oo <- options(repos = "https://cran.r-project.org/")
+install.packages("Matrix")
+install.packages("lme4")
+options(oo)
+
+
+#makes your random factor a factor
 your.data$Random.factor <- as.factor(your.data$Random.factor)
 
 
